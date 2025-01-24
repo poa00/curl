@@ -785,6 +785,7 @@ stdin
 stdout
 Steinar
 Stenberg
+STLS
 STOR
 strcat
 strcpy
@@ -905,6 +906,7 @@ vnd
 VRF
 VRFY
 VSE
+vsftpd
 vsprintf
 vt
 vtls

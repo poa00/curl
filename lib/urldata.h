@@ -241,8 +241,7 @@ typedef CURLcode (*Curl_datastream)(struct Curl_easy *data,
 #ifdef HAVE_GSSAPI
 /* Types needed for krb5-ftp connections */
 struct krb5buffer {
-  void *data;
-  size_t size;
+  struct dynbuf buf;
   size_t index;
   BIT(eof_flag);
 };
@@ -657,7 +656,7 @@ enum doh_slots {
  */
 
 struct Curl_handler {
-  const char *scheme;        /* URL scheme name. */
+  const char *scheme;        /* URL scheme name in lowercase */
 
   /* Complement to setup_connection_internals(). This is done before the
      transfer "owns" the connection. */
@@ -907,11 +906,6 @@ struct connectdata {
   /*************** Request - specific items ************/
 #if defined(USE_WINDOWS_SSPI) && defined(SECPKG_ATTR_ENDPOINT_BINDINGS)
   CtxtHandle *sslContext;
-#endif
-
-#if defined(_WIN32) && defined(USE_WINSOCK)
-  struct curltime last_sndbuf_update;  /* last time readwrite_upload called
-                                          win_update_buffer_size */
 #endif
 
 #ifdef USE_GSASL
@@ -1376,7 +1370,7 @@ struct UrlState {
   unsigned char select_bits; /* != 0 -> bitmask of socket events for this
                                  transfer overriding anything the socket may
                                  report */
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
   BIT(conncache_lock);
 #endif
   /* when curl_easy_perform() is called, the multi handle is "owned" by

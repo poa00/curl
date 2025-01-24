@@ -50,7 +50,7 @@ struct conncache {
 #define BUNDLE_UNKNOWN     0  /* initial value */
 #define BUNDLE_MULTIPLEX   2
 
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
 /* the debug versions of these macros make extra certain that the lock is
    never doubly locked or unlocked */
 #define CONNCACHE_LOCK(x)                                               \
@@ -85,7 +85,7 @@ struct connectbundle {
 };
 
 /* returns 1 on error, 0 is fine */
-int Curl_conncache_init(struct conncache *, int size);
+int Curl_conncache_init(struct conncache *, size_t size);
 void Curl_conncache_destroy(struct conncache *connc);
 
 /* return the correct bundle, to a host or a proxy */

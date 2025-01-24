@@ -53,6 +53,11 @@
 #include <inet.h>
 #endif
 
+#ifdef __DragonFly__
+/* Required for __DragonFly_version */
+#include <sys/param.h>
+#endif
+
 #include "urldata.h"
 #include "bufq.h"
 #include "sendf.h"
@@ -137,8 +142,9 @@ static void nosigpipe(struct Curl_easy *data,
 #define nosigpipe(x,y) Curl_nop_stmt
 #endif
 
-#if defined(__DragonFly__) || defined(USE_WINSOCK)
-/* DragonFlyBSD and Windows use millisecond units */
+#if defined(USE_WINSOCK) || \
+   (defined(__DragonFly__) && __DragonFly_version < 500702)
+/* DragonFlyBSD < 500702 and Windows use millisecond units */
 #define KEEPALIVE_FACTOR(x) (x *= 1000)
 #else
 #define KEEPALIVE_FACTOR(x)
@@ -370,7 +376,7 @@ int Curl_socket_close(struct Curl_easy *data, struct connectdata *conn,
 #define DETECT_OS_PREVISTA 1
 #define DETECT_OS_VISTA_OR_LATER 2
 
-void Curl_sndbufset(curl_socket_t sockfd)
+void Curl_sndbuf_init(curl_socket_t sockfd)
 {
   int val = CURL_MAX_WRITE_SIZE + 32;
   int curval = 0;
@@ -395,7 +401,7 @@ void Curl_sndbufset(curl_socket_t sockfd)
 
   setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, (const char *)&val, sizeof(val));
 }
-#endif
+#endif /* USE_WINSOCK */
 
 #ifndef CURL_DISABLE_BINDLOCAL
 static CURLcode bindlocal(struct Curl_easy *data, struct connectdata *conn,
@@ -616,16 +622,6 @@ static CURLcode bindlocal(struct Curl_easy *data, struct connectdata *conn,
   for(;;) {
     if(bind(sockfd, sock, sizeof_sa) >= 0) {
       /* we succeeded to bind */
-      struct Curl_sockaddr_storage add;
-      curl_socklen_t size = sizeof(add);
-      memset(&add, 0, sizeof(struct Curl_sockaddr_storage));
-      if(getsockname(sockfd, (struct sockaddr *) &add, &size) < 0) {
-        char buffer[STRERROR_LEN];
-        data->state.os_errno = error = SOCKERRNO;
-        failf(data, "getsockname() failed with errno %d: %s",
-              error, Curl_strerror(error, buffer, sizeof(buffer)));
-        return CURLE_INTERFACE_FAILED;
-      }
       infof(data, "Local port: %hu", port);
       conn->bits.bound = TRUE;
       return CURLE_OK;
@@ -780,6 +776,10 @@ struct cf_socket_ctx {
   struct curltime started_at;        /* when socket was created */
   struct curltime connected_at;      /* when socket connected/got first byte */
   struct curltime first_byte_at;     /* when first byte was recvd */
+#ifdef USE_WINSOCK
+  struct curltime last_sndbuf_query_at;  /* when SO_SNDBUF last queried */
+  ULONG sndbuf_size;                     /* the last set SO_SNDBUF size */
+#endif
   int error;                         /* errno of last failure or 0 */
 #ifdef DEBUGBUILD
   int wblock_percent;                /* percent of writes doing EAGAIN */
@@ -923,7 +923,8 @@ static CURLcode set_local_ip(struct Curl_cfilter *cf,
   struct cf_socket_ctx *ctx = cf->ctx;
 
 #ifdef HAVE_GETSOCKNAME
-  if(!(data->conn->handler->protocol & CURLPROTO_TFTP)) {
+  if((ctx->sock != CURL_SOCKET_BAD) &&
+     !(data->conn->handler->protocol & CURLPROTO_TFTP)) {
     /* TFTP does not connect, so it cannot get the IP like this */
 
     char buffer[STRERROR_LEN];
@@ -1013,7 +1014,7 @@ static CURLcode cf_socket_open(struct Curl_cfilter *cf,
 
   nosigpipe(data, ctx->sock);
 
-  Curl_sndbufset(ctx->sock);
+  Curl_sndbuf_init(ctx->sock);
 
   if(is_tcp && data->set.tcp_keepalive)
     tcpkeepalive(data, ctx->sock);
@@ -1273,6 +1274,32 @@ static bool cf_socket_data_pending(struct Curl_cfilter *cf,
   return (readable > 0 && (readable & CURL_CSELECT_IN));
 }
 
+#ifdef USE_WINSOCK
+
+#ifndef SIO_IDEAL_SEND_BACKLOG_QUERY
+#define SIO_IDEAL_SEND_BACKLOG_QUERY 0x4004747B
+#endif
+
+static void win_update_sndbuf_size(struct cf_socket_ctx *ctx)
+{
+  ULONG ideal;
+  DWORD ideallen;
+  struct curltime n = Curl_now();
+
+  if(Curl_timediff(n, ctx->last_sndbuf_query_at) > 1000) {
+    if(!WSAIoctl(ctx->sock, SIO_IDEAL_SEND_BACKLOG_QUERY, 0, 0,
+                  &ideal, sizeof(ideal), &ideallen, 0, 0) &&
+       ideal != ctx->sndbuf_size &&
+       !setsockopt(ctx->sock, SOL_SOCKET, SO_SNDBUF,
+                   (const char *)&ideal, sizeof(ideal))) {
+      ctx->sndbuf_size = ideal;
+    }
+    ctx->last_sndbuf_query_at = n;
+  }
+}
+
+#endif /* USE_WINSOCK */
+
 static ssize_t cf_socket_send(struct Curl_cfilter *cf, struct Curl_easy *data,
                               const void *buf, size_t len, CURLcode *err)
 {
@@ -1288,7 +1315,7 @@ static ssize_t cf_socket_send(struct Curl_cfilter *cf, struct Curl_easy *data,
 #ifdef DEBUGBUILD
   /* simulate network blocking/partial writes */
   if(ctx->wblock_percent > 0) {
-    unsigned char c;
+    unsigned char c = 0;
     Curl_rand(data, &c, 1);
     if(c >= ((100-ctx->wblock_percent)*256/100)) {
       CURL_TRC_CF(data, cf, "send(len=%zu) SIMULATE EWOULDBLOCK", orig_len);
@@ -1345,6 +1372,11 @@ static ssize_t cf_socket_send(struct Curl_cfilter *cf, struct Curl_easy *data,
     }
   }
 
+#if defined(USE_WINSOCK)
+  if(!*err)
+    win_update_sndbuf_size(ctx);
+#endif
+
   CURL_TRC_CF(data, cf, "send(len=%zu) -> %d, err=%d",
               orig_len, (int)nwritten, *err);
   cf->conn->sock[cf->sockindex] = fdsave;
@@ -1366,7 +1398,7 @@ static ssize_t cf_socket_recv(struct Curl_cfilter *cf, struct Curl_easy *data,
 #ifdef DEBUGBUILD
   /* simulate network blocking/partial reads */
   if(cf->cft != &Curl_cft_udp && ctx->rblock_percent > 0) {
-    unsigned char c;
+    unsigned char c = 0;
     Curl_rand(data, &c, 1);
     if(c >= ((100-ctx->rblock_percent)*256/100)) {
       CURL_TRC_CF(data, cf, "recv(len=%zu) SIMULATE EWOULDBLOCK", len);

@@ -44,6 +44,7 @@ AM_MAINTAINER_MODE
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 CURL_CHECK_OPTION_DEBUG
+AM_CONDITIONAL(DEBUGBUILD, test x$want_debug = xyes)
 CURL_CHECK_OPTION_OPTIMIZE
 CURL_CHECK_OPTION_WARNINGS
 CURL_CHECK_OPTION_WERROR
@@ -310,7 +311,7 @@ AS_HELP_STRING([--with-test-nghttpx=PATH],[where to find nghttpx for testing]),
 )
 AC_SUBST(TEST_NGHTTPX)
 
-CADDY=caddy
+CADDY=/usr/bin/caddy
 AC_ARG_WITH(test-caddy,dnl
 AS_HELP_STRING([--with-test-caddy=PATH],[where to find caddy for testing]),
   CADDY=$withval
@@ -319,6 +320,16 @@ AS_HELP_STRING([--with-test-caddy=PATH],[where to find caddy for testing]),
   fi
 )
 AC_SUBST(CADDY)
+
+VSFTPD=/usr/sbin/vsftpd
+AC_ARG_WITH(test-vsftpd,dnl
+AS_HELP_STRING([--with-test-vsftpd=PATH],[where to find vsftpd for testing]),
+  VSFTPD=$withval
+  if test X"$OPT_VSFTPD" = "Xno" ; then
+      VSFTPD=""
+  fi
+)
+AC_SUBST(VSFTPD)
 
 dnl we'd like a httpd+apachectl as test server
 dnl
@@ -539,7 +550,6 @@ CURL_CHECK_COMPILER_PROTOTYPE_MISMATCH
 CURL_CHECK_COMPILER_SYMBOL_HIDING
 
 CURL_CHECK_CURLDEBUG
-AM_CONDITIONAL(CURLDEBUG, test x$want_curldebug = xyes)
 
 supports_unittests=yes
 # cross-compilation of unit tests static library/programs fails when
@@ -3790,26 +3800,6 @@ AC_CHECK_FUNCS([\
   snprintf \
   utime \
   utimes \
-],[
-],[
-  func="$ac_func"
-  eval skipcheck=\$skipcheck_$func
-  if test "x$skipcheck" != "xyes"; then
-    AC_MSG_CHECKING([deeper for $func])
-    AC_LINK_IFELSE([
-      AC_LANG_PROGRAM([[
-      ]],[[
-        $func ();
-      ]])
-    ],[
-      AC_MSG_RESULT([yes])
-      eval "ac_cv_func_$func=yes"
-      AC_DEFINE_UNQUOTED(XC_SH_TR_CPP([HAVE_$func]), [1],
-        [Define to 1 if you have the $func function.])
-    ],[
-      AC_MSG_RESULT([but still no])
-    ])
-  fi
 ])
 
 dnl On Android, the only way to know if fseeko can be used is to see if it is
@@ -5027,7 +5017,7 @@ AC_MSG_NOTICE([Configured to build curl/libcurl:
   Features:         ${SUPPORT_FEATURES}
 ])
 
-non13=`echo "$TLSCHOICE" | grep -Ei 'bearssl|secure-transport|mbedtls'`;
+non13=`echo "$TLSCHOICE" | $EGREP -i 'bearssl|secure-transport|mbedtls'`;
 if test -n "$non13"; then
  cat >&2 << _EOF
   WARNING: A selected TLS library ($TLSCHOICE) does not support TLS 1.3!

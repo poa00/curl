@@ -83,13 +83,11 @@
 #include "tool_progress.h"
 #include "tool_ipfs.h"
 #include "dynbuf.h"
+#ifdef DEBUGBUILD
+#include "easyif.h"  /* for libcurl's debug-only curl_easy_perform_ev() */
+#endif
 
 #include "memdebug.h" /* keep this as LAST include */
-
-#ifdef CURLDEBUG
-/* libcurl's debug builds provide an extra function */
-CURLcode curl_easy_perform_ev(CURL *easy);
-#endif
 
 #ifndef O_BINARY
 /* since O_BINARY as used in bitmasks, setting it to zero makes it usable in
@@ -975,7 +973,7 @@ static CURLcode single_transfer(struct GlobalConfig *global,
         *added = TRUE;
         per->config = config;
         per->curl = curl;
-        per->urlnum = urlnode->num;
+        per->urlnum = (unsigned int)urlnode->num;
 
         /* default headers output stream is stdout */
         heads = &per->heads;
@@ -1315,7 +1313,7 @@ static CURLcode single_transfer(struct GlobalConfig *global,
         my_setopt(curl, CURLOPT_SEEKFUNCTION, tool_seek_cb);
 
         {
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
           char *env = getenv("CURL_BUFFERSIZE");
           if(env) {
             long size = strtol(env, NULL, 10);
@@ -1647,7 +1645,7 @@ static CURLcode single_transfer(struct GlobalConfig *global,
            *  must do the same thing as classic:
            *    --cert <filename>:<password> --cert-type p12
            *  but is designed to test blob */
-#if defined(CURLDEBUG) || defined(DEBUGBUILD)
+#ifdef DEBUGBUILD
           if(config->cert && (strlen(config->cert) > 8) &&
              (memcmp(config->cert, "loadmem=",8) == 0)) {
             FILE *fInCert = fopen(config->cert + 8, "rb");
@@ -1690,7 +1688,7 @@ static CURLcode single_transfer(struct GlobalConfig *global,
                         config->proxy_cert_type);
 
 
-#if defined(CURLDEBUG) || defined(DEBUGBUILD)
+#ifdef DEBUGBUILD
           if(config->key && (strlen(config->key) > 8) &&
              (memcmp(config->key, "loadmem=",8) == 0)) {
             FILE *fInCert = fopen(config->key + 8, "rb");
@@ -1731,14 +1729,11 @@ static CURLcode single_transfer(struct GlobalConfig *global,
           my_setopt_str(curl, CURLOPT_SSLKEYTYPE, config->key_type);
           my_setopt_str(curl, CURLOPT_PROXY_SSLKEYTYPE,
                         config->proxy_key_type);
+
+          /* libcurl default is strict verifyhost -> 1L, verifypeer -> 1L */
           if(config->insecure_ok) {
             my_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
             my_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-          }
-          else {
-            my_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-            /* libcurl default is strict verifyhost -> 2L   */
-            /* my_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L); */
           }
 
           if(config->doh_insecure_ok) {
@@ -1749,9 +1744,6 @@ static CURLcode single_transfer(struct GlobalConfig *global,
           if(config->proxy_insecure_ok) {
             my_setopt(curl, CURLOPT_PROXY_SSL_VERIFYPEER, 0L);
             my_setopt(curl, CURLOPT_PROXY_SSL_VERIFYHOST, 0L);
-          }
-          else {
-            my_setopt(curl, CURLOPT_PROXY_SSL_VERIFYPEER, 1L);
           }
 
           if(config->verifystatus)
@@ -2490,7 +2482,7 @@ static CURLcode serial_transfers(struct GlobalConfig *global,
         break;
     }
     start = tvnow();
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
     if(global->test_event_based)
       result = curl_easy_perform_ev(per->curl);
     else

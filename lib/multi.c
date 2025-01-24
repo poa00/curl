@@ -364,10 +364,21 @@ static size_t hash_fd(void *key, size_t key_length, size_t slots_num)
  * per call."
  *
  */
-static void sh_init(struct Curl_hash *hash, int hashsize)
+static void sh_init(struct Curl_hash *hash, size_t hashsize)
 {
   Curl_hash_init(hash, hashsize, hash_fd, fd_key_compare,
                  sh_freeentry);
+}
+
+/* multi->proto_hash destructor. Should never be called as elements
+ * MUST be added with their own destructor */
+static void ph_freeentry(void *p)
+{
+  (void)p;
+  /* Will always be FALSE. Cannot use a 0 assert here since compilers
+   * are not in agreement if they then want a NORETURN attribute or
+   * not. *sigh* */
+  DEBUGASSERT(p == NULL);
 }
 
 /*
@@ -381,9 +392,9 @@ static void multi_addmsg(struct Curl_multi *multi, struct Curl_message *msg)
   Curl_llist_append(&multi->msglist, msg, &msg->list);
 }
 
-struct Curl_multi *Curl_multi_handle(int hashsize, /* socket hash */
-                                     int chashsize, /* connection hash */
-                                     int dnssize) /* dns hash */
+struct Curl_multi *Curl_multi_handle(size_t hashsize, /* socket hash */
+                                     size_t chashsize, /* connection hash */
+                                     size_t dnssize) /* dns hash */
 {
   struct Curl_multi *multi = calloc(1, sizeof(struct Curl_multi));
 
@@ -395,6 +406,9 @@ struct Curl_multi *Curl_multi_handle(int hashsize, /* socket hash */
   Curl_init_dnscache(&multi->hostcache, dnssize);
 
   sh_init(&multi->sockhash, hashsize);
+
+  Curl_hash_init(&multi->proto_hash, 23,
+                 Curl_hash_str, Curl_str_key_compare, ph_freeentry);
 
   if(Curl_conncache_init(&multi->conn_cache, chashsize))
     goto error;
@@ -431,6 +445,7 @@ struct Curl_multi *Curl_multi_handle(int hashsize, /* socket hash */
 error:
 
   sockhash_destroy(&multi->sockhash);
+  Curl_hash_destroy(&multi->proto_hash);
   Curl_hash_destroy(&multi->hostcache);
   Curl_conncache_destroy(&multi->conn_cache);
   free(multi);
@@ -551,6 +566,8 @@ CURLMcode curl_multi_add_handle(struct Curl_multi *multi,
    */
   if(data->set.errorbuffer)
     data->set.errorbuffer[0] = 0;
+
+  data->state.os_errno = 0;
 
   /* make the Curl_easy refer back to this multi handle - before Curl_expire()
      is called. */
@@ -1349,13 +1366,6 @@ static CURLMcode multi_wait(struct Curl_multi *multi,
   if(timeout_ms < 0)
     return CURLM_BAD_FUNCTION_ARGUMENT;
 
-  /* If the internally desired timeout is actually shorter than requested from
-     the outside, then use the shorter time! But only if the internal timer
-     is actually larger than -1! */
-  (void)multi_timeout(multi, &timeout_internal);
-  if((timeout_internal >= 0) && (timeout_internal < (long)timeout_ms))
-    timeout_ms = (int)timeout_internal;
-
   memset(ufds, 0, ufds_len * sizeof(struct pollfd));
   memset(&ps, 0, sizeof(ps));
 
@@ -1458,6 +1468,14 @@ static CURLMcode multi_wait(struct Curl_multi *multi,
   }
 #endif
 #endif
+
+  /* We check the internal timeout *AFTER* we collected all sockets to
+   * poll. Collecting the sockets may install new timers by protocols
+   * and connection filters.
+   * Use the shorter one of the internal and the caller requested timeout. */
+  (void)multi_timeout(multi, &timeout_internal);
+  if((timeout_internal >= 0) && (timeout_internal < (long)timeout_ms))
+    timeout_ms = (int)timeout_internal;
 
 #if defined(ENABLE_WAKEUP) && defined(USE_WINSOCK)
   if(nfds || use_wakeup) {
@@ -2854,6 +2872,7 @@ CURLMcode curl_multi_cleanup(struct Curl_multi *multi)
     Curl_conncache_close_all_connections(&multi->conn_cache);
 
     sockhash_destroy(&multi->sockhash);
+    Curl_hash_destroy(&multi->proto_hash);
     Curl_conncache_destroy(&multi->conn_cache);
     Curl_hash_destroy(&multi->hostcache);
     Curl_psl_destroy(&multi->psl);
@@ -2865,10 +2884,6 @@ CURLMcode curl_multi_cleanup(struct Curl_multi *multi)
     wakeup_close(multi->wakeup_pair[0]);
     wakeup_close(multi->wakeup_pair[1]);
 #endif
-#endif
-
-#ifdef USE_SSL
-    Curl_free_multi_ssl_backend_data(multi->ssl_backend_data);
 #endif
 
     multi_xfer_bufs_free(multi);

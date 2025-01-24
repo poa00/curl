@@ -119,6 +119,10 @@ static const struct Curl_OID OIDtable[] = {
   { "1.2.840.10045.2.1",        "ecPublicKey" },
   { "1.2.840.10045.3.0.1",      "c2pnb163v1" },
   { "1.2.840.10045.4.1",        "ecdsa-with-SHA1" },
+  { "1.2.840.10045.4.3.1",      "ecdsa-with-SHA224" },
+  { "1.2.840.10045.4.3.2",      "ecdsa-with-SHA256" },
+  { "1.2.840.10045.4.3.3",      "ecdsa-with-SHA384" },
+  { "1.2.840.10045.4.3.4",      "ecdsa-with-SHA512" },
   { "1.2.840.10046.2.1",        "dhpublicnumber" },
   { "1.2.840.113549.1.1.1",     "rsaEncryption" },
   { "1.2.840.113549.1.1.2",     "md2WithRSAEncryption" },
@@ -160,6 +164,7 @@ static const struct Curl_OID OIDtable[] = {
   { "2.16.840.1.101.3.4.2.1",   "sha256" },
   { "2.16.840.1.101.3.4.2.2",   "sha384" },
   { "2.16.840.1.101.3.4.2.3",   "sha512" },
+  { "1.2.840.113549.1.9.2",     "unstructuredName" },
   { (const char *) NULL,        (const char *) NULL }
 };
 
@@ -371,7 +376,7 @@ utf8asn1str(struct dynbuf *to, int type, const char *from, const char *end)
   else {
     while(!result && (from < end)) {
       char buf[4]; /* decode buffer */
-      int charsize = 1;
+      size_t charsize = 1;
       unsigned int wc = 0;
 
       switch(size) {
@@ -467,6 +472,8 @@ static CURLcode OID2str(struct dynbuf *store,
         const struct Curl_OID *op = searchOID(Curl_dyn_ptr(&buf));
         if(op)
           result = Curl_dyn_add(store, op->textoid);
+        else
+          result = Curl_dyn_add(store, Curl_dyn_ptr(&buf));
         Curl_dyn_free(&buf);
       }
     }
@@ -956,7 +963,8 @@ static int do_pubkey(struct Curl_easy *data, int certnum,
       if(ssl_push_certinfo(data, certnum, "ECC Public Key", q))
         return 1;
     }
-    return do_pubkey_field(data, certnum, "ecPublicKey", pubkey);
+    return do_pubkey_field(data, certnum, "ecPublicKey", pubkey) == CURLE_OK
+      ? 0 : 1;
   }
 
   /* Get the public key (single element). */

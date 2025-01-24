@@ -164,7 +164,7 @@ static CURLcode ldap_do(struct Curl_easy *data, bool *done);
  */
 
 const struct Curl_handler Curl_handler_ldap = {
-  "LDAP",                               /* scheme */
+  "ldap",                               /* scheme */
   ZERO_NULL,                            /* setup_connection */
   ldap_do,                              /* do_it */
   ZERO_NULL,                            /* done */
@@ -193,7 +193,7 @@ const struct Curl_handler Curl_handler_ldap = {
  */
 
 const struct Curl_handler Curl_handler_ldaps = {
-  "LDAPS",                              /* scheme */
+  "ldaps",                              /* scheme */
   ZERO_NULL,                            /* setup_connection */
   ldap_do,                              /* do_it */
   ZERO_NULL,                            /* done */
@@ -485,6 +485,8 @@ static CURLcode ldap_do(struct Curl_easy *data, bool *done)
     }
 */
 #else
+    (void)ldap_option;
+    (void)ldap_ca;
     /* we should probably never come up to here since configure
        should check in first place if we can support LDAP SSL/TLS */
     failf(data, "LDAP local: SSL/TLS not supported with this version "

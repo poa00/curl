@@ -38,6 +38,7 @@ struct Curl_ssl_session;
 #define SSLSUPP_TLS13_CIPHERSUITES (1<<5) /* supports TLS 1.3 ciphersuites */
 #define SSLSUPP_CAINFO_BLOB  (1<<6)
 #define SSLSUPP_ECH          (1<<7)
+#define SSLSUPP_CA_CACHE     (1<<8)
 
 #define ALPN_ACCEPTED "ALPN: server accepted "
 
@@ -52,7 +53,6 @@ struct Curl_ssl_session;
 
 /* Curl_multi SSL backend-specific data; declared differently by each SSL
    backend */
-struct multi_ssl_backend_data;
 struct Curl_cfilter;
 
 CURLsslset Curl_init_sslset_nolock(curl_sslbackend id, const char *name,
@@ -181,8 +181,6 @@ bool Curl_ssl_cert_status_request(void);
 
 bool Curl_ssl_false_start(struct Curl_easy *data);
 
-void Curl_free_multi_ssl_backend_data(struct multi_ssl_backend_data *mbackend);
-
 #define SSL_SHUTDOWN_TIMEOUT 10000 /* ms */
 
 CURLcode Curl_ssl_cfilter_add(struct Curl_easy *data,
@@ -205,7 +203,7 @@ CURLcode Curl_cf_ssl_proxy_insert_after(struct Curl_cfilter *cf_at,
  * Option is one of the defined SSLSUPP_* values.
  * `data` maybe NULL for the features of the default implementation.
  */
-bool Curl_ssl_supports(struct Curl_easy *data, int ssl_option);
+bool Curl_ssl_supports(struct Curl_easy *data, unsigned int ssl_option);
 
 /**
  * Get the internal ssl instance (like OpenSSL's SSL*) from the filter

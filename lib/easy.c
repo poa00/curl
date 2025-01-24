@@ -374,7 +374,7 @@ struct Curl_easy *curl_easy_init(void)
   return data;
 }
 
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
 
 struct socketmonitor {
   struct socketmonitor *next; /* the next node in the list or NULL */
@@ -655,7 +655,7 @@ static CURLcode easy_events(struct Curl_multi *multi)
 
   return wait_or_timeout(multi, &evs);
 }
-#else /* CURLDEBUG */
+#else /* DEBUGBUILD */
 /* when not built with debug, this function doesn't exist */
 #define easy_events(x) CURLE_NOT_BUILT_IN
 #endif
@@ -728,6 +728,8 @@ static CURLcode easy_perform(struct Curl_easy *data, bool events)
     /* clear this as early as possible */
     data->set.errorbuffer[0] = 0;
 
+  data->state.os_errno = 0;
+
   if(data->multi) {
     failf(data, "easy handle already used in multi handle");
     return CURLE_FAILED_INIT;
@@ -786,7 +788,7 @@ CURLcode curl_easy_perform(struct Curl_easy *data)
   return easy_perform(data, FALSE);
 }
 
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
 /*
  * curl_easy_perform_ev() is the external interface that performs a blocking
  * transfer using the event-based API internally.

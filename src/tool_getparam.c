@@ -865,7 +865,8 @@ static ParameterError data_urlencode(struct GlobalConfig *global,
   }
   else {
     /* neither @ nor =, so no name and it isn't a file */
-    nlen = is_file = 0;
+    nlen = 0;
+    is_file = 0;
     p = nextarg;
   }
   if('@' == is_file) {
@@ -894,8 +895,7 @@ static ParameterError data_urlencode(struct GlobalConfig *global,
     err = getstr(&postdata, p, ALLOW_BLANK);
     if(err)
       goto error;
-    if(postdata)
-      size = strlen(postdata);
+    size = strlen(postdata);
   }
 
   if(!postdata) {
@@ -1018,7 +1018,7 @@ static const struct LongShort *single(char letter)
     unsigned int j;
     for(j = 0; j < sizeof(aliases)/sizeof(aliases[0]); j++) {
       if(aliases[j].letter != ' ') {
-        unsigned char l = aliases[j].letter;
+        unsigned char l = (unsigned char)aliases[j].letter;
         singles[l - ' '] = &aliases[j];
       }
     }
@@ -1124,8 +1124,7 @@ static ParameterError set_data(cmdline_t cmd,
     err = getstr(&postdata, nextarg, ALLOW_BLANK);
     if(err)
       return err;
-    if(postdata)
-      size = strlen(postdata);
+    size = strlen(postdata);
   }
   if(cmd == C_JSON)
     config->jsoned = TRUE;
@@ -1826,7 +1825,7 @@ ParameterError getparameter(const char *flag, /* f or -long-flag */
       config->sasl_ir = toggle;
       break;
     case C_TEST_EVENT: /* --test-event */
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
       global->test_event_based = toggle;
 #else
       warnf(global, "--test-event is ignored unless a debug build");

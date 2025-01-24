@@ -75,7 +75,7 @@ static CURLcode mqtt_setup_conn(struct Curl_easy *data,
  */
 
 const struct Curl_handler Curl_handler_mqtt = {
-  "MQTT",                             /* scheme */
+  "mqtt",                             /* scheme */
   mqtt_setup_conn,                    /* setup_connection */
   mqtt_do,                            /* do_it */
   mqtt_done,                          /* done */
@@ -585,7 +585,7 @@ static size_t mqtt_decode_len(unsigned char *buf,
   return len;
 }
 
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
 static const char *statenames[]={
   "MQTT_FIRST",
   "MQTT_REMAINING_LENGTH",
@@ -606,7 +606,7 @@ static void mqstate(struct Curl_easy *data,
 {
   struct connectdata *conn = data->conn;
   struct mqtt_conn *mqtt = &conn->proto.mqtt;
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
   infof(data, "%s (from %s) (next is %s)",
         statenames[state],
         statenames[mqtt->state],

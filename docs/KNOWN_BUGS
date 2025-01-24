@@ -80,6 +80,7 @@ problems may have been fixed or changed somewhat since this was written.
  10.3 FTPS over SOCKS
 
  11. Internals
+ 11.1 gssapi library name + version is missing in curl_version_info()
  11.2 error buffer not set if connection to multiple addresses fails
  11.4 HTTP test server 'connection-monitor' problems
  11.5 Connection information when using TCP Fast Open
@@ -104,6 +105,8 @@ problems may have been fixed or changed somewhat since this was written.
 
  16. aws-sigv4
  16.1 aws-sigv4 does not sign requests with * correctly
+ 16.2 aws-sigv4 does not handle multipart/form-data correctly
+ 16.3 aws-sigv4 has problems with particular URLs
  16.6 aws-sigv4 does not behave well with AWS VPC Lattice
 
  17. HTTP/2
@@ -113,6 +116,7 @@ problems may have been fixed or changed somewhat since this was written.
 
  18. HTTP/3
  18.1 connection migration does not work
+ 18.2 quiche: QUIC connection is draining
 
  19. RTSP
  19.1 Some methods do not support response bodies
@@ -490,6 +494,12 @@ problems may have been fixed or changed somewhat since this was written.
 
 11. Internals
 
+11.1 gssapi library name + version is missing in curl_version_info()
+
+ The struct needs to be expanded and code added to store this info.
+
+ See https://github.com/curl/curl/issues/13492
+
 11.2 error buffer not set if connection to multiple addresses fails
 
  If you ask libcurl to resolve a hostname like example.com to IPv6 addresses
@@ -607,6 +617,14 @@ problems may have been fixed or changed somewhat since this was written.
 
  https://github.com/curl/curl/issues/7559
 
+16.2 aws-sigv4 does not handle multipart/form-data correctly
+
+ https://github.com/curl/curl/issues/13351
+
+16.3 aws-sigv4 has problems with particular URLs
+
+ https://github.com/curl/curl/issues/13058
+
 16.6 aws-sigv4 does not behave well with AWS VPC Lattice
 
  https://github.com/curl/curl/issues/11007
@@ -639,6 +657,12 @@ problems may have been fixed or changed somewhat since this was written.
 18.1 connection migration does not work
 
  https://github.com/curl/curl/issues/7695
+
+18.2 quiche: QUIC connection is draining
+
+ The transfer ends with error "QUIC connection is draining".
+
+ https://github.com/curl/curl/issues/12037
 
 19. RTSP
 

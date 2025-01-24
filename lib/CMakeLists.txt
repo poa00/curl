@@ -56,6 +56,7 @@ if(BUILD_TESTING)
     ${HHEADERS} ${CSOURCES}
   )
   target_compile_definitions(curlu PUBLIC UNITTESTS CURL_STATICLIB)
+  target_link_libraries(curlu PRIVATE ${CURL_LIBS})
 endif()
 
 if(ENABLE_CURLDEBUG)
@@ -64,16 +65,12 @@ if(ENABLE_CURLDEBUG)
   set_source_files_properties(memdebug.c curl_multibyte.c PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 endif()
 
-if(BUILD_TESTING)
-  target_link_libraries(curlu PRIVATE ${CURL_LIBS})
-endif()
-
 transform_makefile_inc("Makefile.soname" "${CMAKE_CURRENT_BINARY_DIR}/Makefile.soname.cmake")
 include(${CMAKE_CURRENT_BINARY_DIR}/Makefile.soname.cmake)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "AIX" OR
+if(APPLE OR
+  CMAKE_SYSTEM_NAME STREQUAL "AIX" OR
   CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
-  CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR
   CMAKE_SYSTEM_NAME STREQUAL "SunOS" OR
   CMAKE_SYSTEM_NAME STREQUAL "GNU/kFreeBSD" OR
 
@@ -188,8 +185,8 @@ if(BUILD_SHARED_LIBS)
   add_library(${PROJECT_NAME}::${LIB_SHARED} ALIAS ${LIB_SHARED})
   if(WIN32 OR CYGWIN)
     if(CYGWIN)
-      # For cygwin always compile dllmain.c as a separate unit since it
-      # includes windows.h, which shouldn't be included in other units.
+      # For Cygwin always compile dllmain.c as a separate unit since it
+      # includes windows.h, which should not be included in other units.
       set_source_files_properties(dllmain.c PROPERTIES
         SKIP_UNITY_BUILD_INCLUSION ON)
     endif()

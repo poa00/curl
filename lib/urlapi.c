@@ -82,6 +82,7 @@ struct Curl_URL {
   unsigned short portnum; /* the numerical version (if 'port' is set) */
   BIT(query_present);    /* to support blank */
   BIT(fragment_present); /* to support blank */
+  BIT(guessed_scheme);   /* when a URL without scheme is parsed */
 };
 
 #define DEFAULT_SCHEME "https"
@@ -234,10 +235,8 @@ size_t Curl_is_absolute_url(const char *url, char *buf, size_t buflen,
     /* the length of the scheme is the name part only */
     size_t len = i;
     if(buf) {
+      Curl_strntolower(buf, url, i);
       buf[i] = 0;
-      while(i--) {
-        buf[i] = Curl_raw_tolower(url[i]);
-      }
     }
     return len;
   }
@@ -1225,6 +1224,7 @@ static CURLUcode parseurl(const char *url, CURLU *u, unsigned int flags)
           result = CURLUE_OUT_OF_MEMORY;
           goto fail;
         }
+        u->guessed_scheme = TRUE;
       }
     }
     else if(flags & CURLU_NO_AUTHORITY) {
@@ -1439,6 +1439,8 @@ CURLUcode curl_url_get(const CURLU *u, CURLUPart what,
     ptr = u->scheme;
     ifmissing = CURLUE_NO_SCHEME;
     urldecode = FALSE; /* never for schemes */
+    if((flags & CURLU_NO_GUESS_SCHEME) && u->guessed_scheme)
+      return CURLUE_NO_SCHEME;
     break;
   case CURLUPART_USER:
     ptr = u->user;
@@ -1527,6 +1529,7 @@ CURLUcode curl_url_get(const CURLU *u, CURLUPart what,
       return CURLUE_NO_HOST;
     else {
       const struct Curl_handler *h = NULL;
+      char schemebuf[MAX_SCHEME_LEN + 5];
       if(u->scheme)
         scheme = u->scheme;
       else if(flags & CURLU_DEFAULT_SCHEME)
@@ -1597,8 +1600,13 @@ CURLUcode curl_url_get(const CURLU *u, CURLUPart what,
         }
       }
 
-      url = aprintf("%s://%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
-                    scheme,
+      if(!(flags & CURLU_NO_GUESS_SCHEME) || !u->guessed_scheme)
+        msnprintf(schemebuf, sizeof(schemebuf), "%s://", scheme);
+      else
+        schemebuf[0] = 0;
+
+      url = aprintf("%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+                    schemebuf,
                     u->user ? u->user : "",
                     u->password ? ":": "",
                     u->password ? u->password : "",
@@ -1720,6 +1728,7 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
       break;
     case CURLUPART_SCHEME:
       storep = &u->scheme;
+      u->guessed_scheme = FALSE;
       break;
     case CURLUPART_USER:
       storep = &u->user;
@@ -1792,6 +1801,7 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
     }
     else
       return CURLUE_BAD_SCHEME;
+    u->guessed_scheme = FALSE;
     break;
   }
   case CURLUPART_USER:
